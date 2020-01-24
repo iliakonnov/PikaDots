@@ -32,12 +32,22 @@ struct WebState {
 #[response(status = 200, content_type = "image/png")]
 struct Png(Vec<u8>);
 
+#[derive(Responder, Debug)]
+enum Error {
+    #[response(status = 500)]
+    ServerError(String),
+    #[response(status = 400, content_type = "text/plain")]
+    RequestError(String),
+    #[response(status = 404)]
+    NotFound(&'static str)
+}
+
 
 #[get("/<query>/i.png")]
-fn handle(state: State<WebState>, query: String) -> Result<Png, Status> {
+fn handle(state: State<WebState>, query: String) -> Result<Png, Error> {
     let query: Result<Vec<_>, _> = query.split(',').map(UserSelector::new).collect();
     let query = query.map_err(|e| {
-        Status::new(400, "Invalid selector")
+        Error::RequestError("Invalid selector".to_string())
     })?;
 
     let mut res = {
@@ -45,8 +55,7 @@ fn handle(state: State<WebState>, query: String) -> Result<Png, Status> {
 
         let mut data = state.data.try_lock()
             .ok_or_else(|| {
-                eprintln!("Failed try_lock!");
-                Status::new(500, "Unable to acquire mutex. Try restarting server ¯\\_(ツ)_/¯")
+                Error::ServerError("Unable to acquire mutex. Try restarting server ¯\\_(ツ)_/¯".to_string())
             })?;
         let query = vec![query];
         find_seek(&mut *data, query,  SearchSettings{
@@ -54,14 +63,14 @@ fn handle(state: State<WebState>, query: String) -> Result<Png, Status> {
             limit: 100
         })
             .map_err(|e| {
-                Status::new(500, "Error searching this user")
+                Error::ServerError(format!("Error searching this user: {:?}", e))
             })?
     };
     let user = res.pop();
     let user = if let Some(x) = user {
         x
     } else {
-        return Err(Status::NotFound)
+        return Err(Error::NotFound("No such user"))
     };
 
     let mut buf = Vec::new();
@@ -70,11 +79,11 @@ fn handle(state: State<WebState>, query: String) -> Result<Png, Status> {
     let image = pikadots::draw::generate(&points[..]);
     let img = image.into_image()
         .map_err(|e| {
-            Status::new(500, "Error saving image")
+            Error::ServerError(format!("Error saving image: {:?}", e))
         })?;
     DynamicImage::ImageRgb8(img).write_to(&mut writer, image::PNG)
         .map_err(|e| {
-            Status::new(500, "Error writing image")
+            Error::ServerError(format!("Error writing image: {:?}", e))
         })?;
 
     Ok(Png(writer.into_inner()))
