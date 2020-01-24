@@ -91,11 +91,11 @@ fn do_parse(source: FileOrStdin, src_gz: bool, dest: FileOrStdout, dest_gz: bool
     Ok(())
 }
 
-fn do_draw(gzip: bool, data: FileOrStdin, output: PathBuf, users: Vec<Vec<UserSelector>>, index: Option<File>) -> Res<()> {
+fn do_draw(gzip: bool, data: FileOrStdin, output: PathBuf, users: Vec<Vec<UserSelector>>, index: Option<File>, tz: i8) -> Res<()> {
     use pikadots::data::*;
     use pikadots::search::*;
 
-    fn work<F>(mut searcher: F, output: PathBuf, users: Vec<Vec<UserSelector>>) -> Res<()>
+    fn work<F>(mut searcher: F, output: PathBuf, users: Vec<Vec<UserSelector>>, tz: i8) -> Res<()>
         where F: FnMut(Vec<Vec<UserSelector>>) -> Res<Vec<Vec<UserInfo>>>
     {
         let names: Vec<String> = users.iter().map(|x| selector_name(&x[..])).collect();
@@ -105,7 +105,7 @@ fn do_draw(gzip: bool, data: FileOrStdin, output: PathBuf, users: Vec<Vec<UserSe
             let comments = group.into_iter().map(|x| x.comments);
             let sorted = pikadots::join_sorted(comments);
             let gen = pikadots::draw::generate(&sorted);
-            let img = gen.into_image()?;
+            let img = gen.into_image(tz)?;
             let output = output.join(format!("{}.png", name));
             image::DynamicImage::ImageRgb8(img).save_with_format(output, image::PNG)?;
         }
@@ -125,7 +125,7 @@ fn do_draw(gzip: bool, data: FileOrStdin, output: PathBuf, users: Vec<Vec<UserSe
                 work(|x| find(&mut data, &x, SearchSettings {
                     use_cache: false,
                     limit: std::usize::MAX
-                }), output, users)
+                }), output, users, tz)
             } else {
                 let mut data: Data<_, SeekableRef> = Data::new(Mutex::new(reader));
                 let use_cache = if let Some(idx) = index {
@@ -137,7 +137,7 @@ fn do_draw(gzip: bool, data: FileOrStdin, output: PathBuf, users: Vec<Vec<UserSe
                 work(|x| find_seek(&mut data, x, SearchSettings {
                     use_cache,
                     limit: std::usize::MAX
-                }), output, users)
+                }), output, users, tz)
             };
             bar.finish();
             res
@@ -150,13 +150,13 @@ fn do_draw(gzip: bool, data: FileOrStdin, output: PathBuf, users: Vec<Vec<UserSe
                 work(|x| find(&mut data, &x, SearchSettings {
                     use_cache: false,
                     limit: std::usize::MAX
-                }), output, users)
+                }), output, users, tz)
             } else {
                 let mut data: Data<_, CacheRef> = Data::new(reader);
                 work(|x| find(&mut data, &x, SearchSettings {
                     use_cache: false,
                     limit: std::usize::MAX
-                }), output, users)
+                }), output, users, tz)
             };
             bar.finish();
             res
@@ -220,6 +220,7 @@ fn main() -> Res<()> {
         (author: "by Dino")
         (@subcommand draw =>
             (about: "Draw images")
+            (@arg gzip: -t --tz "Timezone")
             (@arg gzip: -z --gzip "Use gzip when reading data")
             (@arg data: -d --data +takes_value "Path to data. Omit to read from stdin")
             (@arg index: -i --index +takes_value "Load index from file")
@@ -259,6 +260,9 @@ fn main() -> Res<()> {
     match matches.subcommand() {
         ("draw", sub) => {
             let sub = sub.unwrap();
+            let tz = sub.value_of("tz")
+                .map(|x| x.parse())
+                .unwrap_or_else(|| Ok(0))?;
             let gzip = sub.is_present("gzip");
             let data = FileOrStdin::new(sub.value_of_os("data"))?;
             let output = PathBuf::from(sub.value_of_os("output").unwrap());
@@ -277,7 +281,7 @@ fn main() -> Res<()> {
                     .collect();
                 users.push(splitted?)
             }
-            do_draw(gzip, data, output, users, index)
+            do_draw(gzip, data, output, users, index, tz)
         },
         ("parse", sub) => {
             let sub = sub.unwrap();

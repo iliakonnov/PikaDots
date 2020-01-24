@@ -2,6 +2,7 @@ use chrono::{NaiveDateTime, Datelike, NaiveDate, Timelike, Duration};
 use image::{RgbImage, Rgb};
 use crate::Res;
 use font8x8::UnicodeFonts;
+use std::convert::TryInto;
 
 
 fn draw_text(buf: &mut RgbImage, color: Rgb<u8>, mut x: u32, y: u32, text: &str) {
@@ -118,7 +119,7 @@ pub fn generate(points: &[NaiveDateTime]) -> Generated {
 
 impl Generated {
     // TODO: Optimize and remove second pass. But it is very bad idea
-    pub fn into_image(self) -> Res<RgbImage> {
+    pub fn into_image(self, timezone: i8) -> Res<RgbImage> {
         const OFFSET_X: u32 = 8*3;
         const OFFSET_Y: u32 = 8*2;
         const GRAY: [u8; 3] = [0x40, 0x40, 0x40];
@@ -209,12 +210,13 @@ impl Generated {
             }
         }
 
+        let timezone: usize = (24i8 + timezone).try_into()?;
         for (i, x) in (OFFSET_X..width).step_by(60).enumerate() {
             draw_text(
                 &mut img,
                 Rgb([255, 255, 255]),
                 x, 0,
-                &format!("{:02}:00", i)
+                &format!("{:02}:00", (i+timezone) % 24)
             );
             for y in (OFFSET_Y..height) {
                 let px = img.get_pixel_mut(x, y);

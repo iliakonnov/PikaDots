@@ -43,8 +43,9 @@ enum Error {
 }
 
 
-#[get("/<query>/i.png")]
-fn handle(state: State<WebState>, query: String) -> Result<Png, Error> {
+#[get("/<query>/i.png?<tz>")]
+fn handle(state: State<WebState>, query: String, tz: Option<i8>) -> Result<Png, Error> {
+    let tz = tz.unwrap_or(0);
     let query: Result<Vec<_>, _> = query.split(',').map(UserSelector::new).collect();
     let query = query.map_err(|e| {
         Error::RequestError("Invalid selector".to_string())
@@ -77,7 +78,7 @@ fn handle(state: State<WebState>, query: String) -> Result<Png, Error> {
     let mut writer = Cursor::new(buf);
     let points = join_sorted(user.into_iter().map(|x| x.comments));
     let image = pikadots::draw::generate(&points[..]);
-    let img = image.into_image()
+    let img = image.into_image(tz)
         .map_err(|e| {
             Error::ServerError(format!("Error saving image: {:?}", e))
         })?;
