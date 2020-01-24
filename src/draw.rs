@@ -138,12 +138,17 @@ impl Generated {
                 *px = Rgb(match p {
                     0 => [0x00, 0x00, 0x00], // Black
                     // Black -> Blue (step 1)
-                    1 => [0x00, 0x00, 0xFF], // Blue
-                    2 => [0x1E, 0x90, 0xFF], // DodgerBlue
+                    #[cfg(feature="dark")] 1 => [0x00, 0xB3, 0x00], // 60% green
+                    #[cfg(feature="dark")] 2 => [0x9A, 0x9A, 0x00], // 60% yellow
+                    #[cfg(not(feature="dark"))] 1 => [0x00, 0xFF, 0x00], // Lime
+                    #[cfg(not(feature="dark"))] 2 => [0xFF, 0xFF, 0x00], // Yellow
+                    1 => [0x00, 0xFF, 0x00], // Lime
+                    2 => [0xFF, 0xFF, 0x00], // Yellow
                     3 => [0x00, 0xFF, 0xFF], // Cyan
                     4 => [0x7F, 0xFF, 0xD4], // Aquamarine
                     // Blue -> Green (step 2)
-                    5..=7 => [0x3C, 0xB3, 0x71],  // DarkGreen
+                    #[cfg(feature="dark")] 5..=7 => [0x3C, 0xB3, 0x71],  // DarkGreen
+                    #[cfg(not(feature="dark"))] 5..=7 => [0xFF, 0x00, 0x00],  // Red
                     8..=10 => [0x00, 0xFA, 0x9A], // MediumSpringGreen
                     11..=13 => [0x00, 0xFF, 0x00], // Lime
                     13..=15 => [0xAD, 0xFF, 0x2F], // GreenYellow

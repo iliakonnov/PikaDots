@@ -206,8 +206,8 @@ fn load_index<R>(idx: File, data: &mut pikadots::data::Data<R, pikadots::data::S
             continue;
         }
         let (pik, sk, name) = (splitted[0], splitted[1], splitted[2]);
-        let (pik, sk) = (pik.parse()?, sk.parse()?);
-        names.insert(name.to_owned(), pikadots::data::SeekableRef::Seek(sk));
+        let (pik, sk, name) = (pik.parse()?, sk.parse()?, name.to_lowercase());
+        names.insert(name, pikadots::data::SeekableRef::Seek(sk));
         ids.insert(pik, pikadots::data::SeekableRef::Seek(sk));
     }
     data.fill_cache(names, ids);

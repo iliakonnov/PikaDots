@@ -271,7 +271,7 @@ impl<R: Read> SimpleData for Data<R, CacheRef> {
         }
 
         if cfg.names {
-            self.names.insert(info.name.clone(), CacheRef(idx));
+            self.names.insert(info.name.to_lowercase(), CacheRef(idx));
         }
 
         self.cached.push(info);
@@ -287,7 +287,7 @@ impl<R: Read> SimpleData for Data<R, CacheRef> {
     }
 
     fn by_name(&mut self, name: &str) -> ReaderValue {
-        match self.names.get(name) {
+        match self.names.get(&name.to_lowercase()) {
             Some(x) => ReaderValue::Cached(x.0),
             None => ReaderValue::None
         }
@@ -373,7 +373,7 @@ impl<R: Read+Seek> SimpleData for Data<Mutex<R>, SeekableRef> where Self: Seekab
         }
 
         if cfg.names {
-            self.names.insert(info.name.clone(), SeekableRef::Cached(idx));
+            self.names.insert(info.name.to_lowercase(), SeekableRef::Cached(idx));
         }
 
         self.cached.push(info);
@@ -381,7 +381,7 @@ impl<R: Read+Seek> SimpleData for Data<Mutex<R>, SeekableRef> where Self: Seekab
     }
 
     fn by_name(&mut self, name: &str) -> ReaderValue {
-        match self.names.get(name) {
+        match self.names.get(&name.to_lowercase()) {
             Some(SeekableRef::Seek(s)) => self.read_at_val(*s),
             Some(SeekableRef::Cached(x)) => ReaderValue::Cached(*x),
             None => ReaderValue::None

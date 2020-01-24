@@ -12,6 +12,9 @@ path = "src/lib.rs"
 name = "pikadots"
 path = "src/main.rs"
 
+[features]
+dark = []
+
 [dependencies]
 chrono = "0.4"
 clap = "2.33"

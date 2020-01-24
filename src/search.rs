@@ -22,10 +22,10 @@ impl UserSelector {
         // than O(n) without too much hassle, so .to_owned is fine
         if s.starts_with("re:") {
             let s = &s[3..];
-            Ok(UserSelector::Regexp(s.to_owned()))
+            Ok(UserSelector::Regexp(s.to_lowercase()))
         } else if s.starts_with("gl:") {
             let s = &s[3..];
-            Ok(UserSelector::Glob(s.to_owned()))
+            Ok(UserSelector::Glob(s.to_lowercase()))
         } else if s.starts_with("id:") {
             let s = &s[3..];
             let id = s.parse()?;
@@ -35,7 +35,7 @@ impl UserSelector {
             let sk = s.parse()?;
             Ok(UserSelector::Seek(sk))
         } else {
-            Ok(UserSelector::Name(s.to_string()))
+            Ok(UserSelector::Name(s.to_lowercase()))
         }
     }
 
@@ -183,8 +183,12 @@ pub fn find<D: SimpleData>(data: &mut D, query: &[Vec<UserSelector>], mut settin
             'l: while let Some(user) = reader.next() {
                 for (c, v) in &mut to_find {
                     let matches = match c {
-                        Compiled::Name(n) => n == &user.name,
-                        Compiled::Glob(gl) => gl.matches(&user.name),
+                        Compiled::Name(n) => n == &user.name.to_lowercase(),
+                        Compiled::Glob(gl) => gl.matches_with(&user.name, glob::MatchOptions {
+                            case_sensitive: false,
+                            require_literal_separator: false,
+                            require_literal_leading_dot: false
+                        }),
                         Compiled::Regexp(re) => re.reg.is_match(&user.name),
                         Compiled::PikabuId(id) => *id == user.pikabu_id,
                         Compiled::Seek(s) => Some(*s as usize) == user.seek,
