@@ -1,4 +1,3 @@
-#![feature(specialization)]
 #![feature(entry_insert)]
 #[macro_use] extern crate failure;
 use failure::Error;

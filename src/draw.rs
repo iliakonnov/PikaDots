@@ -142,8 +142,6 @@ impl Generated {
                     #[cfg(feature="dark")] 2 => [0x9A, 0x9A, 0x00], // 60% yellow
                     #[cfg(not(feature="dark"))] 1 => [0x00, 0xFF, 0x00], // Lime
                     #[cfg(not(feature="dark"))] 2 => [0xFF, 0xFF, 0x00], // Yellow
-                    1 => [0x00, 0xFF, 0x00], // Lime
-                    2 => [0xFF, 0xFF, 0x00], // Yellow
                     3 => [0x00, 0xFF, 0xFF], // Cyan
                     4 => [0x7F, 0xFF, 0xD4], // Aquamarine
                     // Blue -> Green (step 2)
@@ -162,12 +160,12 @@ impl Generated {
                     52..=63 => [0xDC, 0x14, 0x3C], // Crimson
                     64..=75 => [0xFF, 0x00, 0x00], // Red
                     // Red -> Pink (step 24)
-                    78..=101 => [0xFF, 0x14, 0x93], // Pink
-                    102..=125 => [0xFF, 0x00, 0xFF], // Magenta
-                    126..=149 => [0x8A, 0x2B, 0xE2], // BlueViolet
-                    150..=173 => [0x80, 0x00, 0x80], // Purple
+                    76..=99 => [0xFF, 0x14, 0x93], // Pink
+                    100..=123 => [0xFF, 0x00, 0xFF], // Magenta
+                    124..=147 => [0x8A, 0x2B, 0xE2], // BlueViolet
+                    148..=171 => [0x80, 0x00, 0x80], // Purple
                     // Fallback
-                    _ => [0xFF, 0xFF, 0xFF],  // White
+                    172..=255 => [0xFF, 0xFF, 0xFF],  // White
                 });
                 x += 1;
             }
