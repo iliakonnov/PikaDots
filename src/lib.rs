@@ -1,9 +1,7 @@
 #![feature(entry_insert)]
+#![allow(clippy::blacklisted_name)]  // bar is good identifier
 #[macro_use] extern crate failure;
 use failure::Error;
-use std::collections::HashMap;
-use std::io::{Read, Seek};
-use chrono::NaiveDateTime;
 
 pub type Res<T> = Result<T, Error>;
 

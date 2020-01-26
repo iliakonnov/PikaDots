@@ -1,11 +1,8 @@
 use std::sync::Arc;
 use parking_lot::Mutex;
 use rocket::State;
-use rocket::response::content::{Content, Html};
-use rocket::http::ContentType;
-use rocket::http::Status;
+use rocket::response::content::Html;
 use crate::pikadots::search::find_seek;
-use crate::pikadots::Res;
 use std::io::Cursor;
 use image::DynamicImage;
 use pikadots::search::{UserSelector, SearchSettings};
@@ -35,18 +32,18 @@ struct Png(Vec<u8>);
 
 #[derive(Responder, Debug)]
 enum Error {
-    #[response(status = 500)]
-    ServerError(String),
+    #[response(status = 500, content_type = "text/plain")]
+    Inernal(String),
     #[response(status = 400, content_type = "text/plain")]
-    RequestError(String),
-    #[response(status = 404)]
+    InvalidRequest(String),
+    #[response(status = 404, content_type = "text/plain")]
     NotFound(&'static str)
 }
 
 fn find_user(state: State<WebState>, query: String) -> Result<Vec<UserInfo>, Error> {
     let query: Result<Vec<_>, _> = query.split(',').map(UserSelector::new).collect();
     let query = query.map_err(|e| {
-        Error::RequestError(format!("Invalid selector: {}", e))
+        Error::InvalidRequest(format!("Invalid selector: {}", e))
     })?;
 
     let mut res = {
@@ -54,7 +51,7 @@ fn find_user(state: State<WebState>, query: String) -> Result<Vec<UserInfo>, Err
 
         let mut data = state.data.try_lock()
             .ok_or_else(|| {
-                Error::ServerError("Unable to acquire mutex. Try restarting server ¯\\_(ツ)_/¯".to_string())
+                Error::Inernal("Unable to acquire mutex. Try restarting server ¯\\_(ツ)_/¯".to_string())
             })?;
         let query = vec![query];
         find_seek(&mut *data, query,  SearchSettings{
@@ -62,7 +59,7 @@ fn find_user(state: State<WebState>, query: String) -> Result<Vec<UserInfo>, Err
             limit: 100
         })
             .map_err(|e| {
-                Error::ServerError(format!("Error searching this user: {:?}", e))
+                Error::Inernal(format!("Error searching this user: {:?}", e))
             })?
     };
     let user = res.pop();
@@ -113,17 +110,17 @@ fn do_draw(state: State<WebState>, query: String, tz: Option<i8>) -> Result<Png,
     let tz = tz.unwrap_or(0);
     let users = find_user(state, query)?;
 
-    let mut buf = Vec::new();
+    let buf = Vec::new();
     let mut writer = Cursor::new(buf);
     let points = join_sorted(users.into_iter().map(|x| x.comments));
     let image = pikadots::draw::generate(&points[..]);
     let img = image.into_image(tz)
         .map_err(|e| {
-            Error::ServerError(format!("Error saving image: {:?}", e))
+            Error::Inernal(format!("Error saving image: {:?}", e))
         })?;
     DynamicImage::ImageRgb8(img).write_to(&mut writer, image::PNG)
         .map_err(|e| {
-            Error::ServerError(format!("Error writing image: {:?}", e))
+            Error::Inernal(format!("Error writing image: {:?}", e))
         })?;
 
     Ok(Png(writer.into_inner()))

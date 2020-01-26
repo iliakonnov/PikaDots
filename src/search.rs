@@ -1,11 +1,9 @@
 use crate::data::*;
-use std::io::Read;
 use crate::Res;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use regex;
 use streaming_iterator::StreamingIterator;
-use std::borrow::Cow;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UserSelector {
@@ -41,7 +39,7 @@ impl UserSelector {
 
     pub fn human_readable(&self) -> String {
         match self {
-            UserSelector::Name(n) => format!("{}", n),
+            UserSelector::Name(n) => n.to_string(),
             UserSelector::Glob(gl) => format!("gl:'{}'", gl),
             UserSelector::Regexp(re) => format!("re:'{}'", re),
             UserSelector::PikabuId(id) => format!("id:{}", id),
@@ -84,7 +82,7 @@ impl<'a> Compiled<'a> {
         // FIXME: Cloning in .entry(...) can be avoided somehow. But IDK how.
         let mut regexps = HashMap::new();
         let mut globs = HashMap::new();
-        raw.into_iter().map(|i| match i {
+        raw.iter().map(|i| match i {
             UserSelector::PikabuId(x) => Ok(Compiled::PikabuId(*x)),
             UserSelector::Regexp(r) => regexps
                 .entry(r.clone())
@@ -104,7 +102,7 @@ impl<'a> Compiled<'a> {
             UserSelector::Glob(gl) => globs
                 .entry(gl.clone())
                 .or_insert_with(|| glob::Pattern::new(&gl)
-                    .map(|x| Compiled::Glob(x))
+                    .map(Compiled::Glob)
                     // Because PatternError does not implement Clone.
                     // failure::Error does not implement too, so don't use format_err!(...)
                     .map_err(|e| format!("{}", e))
@@ -113,14 +111,6 @@ impl<'a> Compiled<'a> {
             UserSelector::Seek(x) => Ok(Compiled::Seek(*x))
         }).collect()
     }
-}
-
-fn vec_of_vecs<F: Fn() -> V, V>(f: F, n: usize) -> Vec<V> {
-    let mut res = Vec::with_capacity(n);
-    for i in 0..n {
-        res.push(f())
-    }
-    res
 }
 
 pub struct SearchSettings {
@@ -137,7 +127,7 @@ pub fn find_seek<D: SimpleData+SeekableData>(data: &mut D, query: Vec<Vec<UserSe
         let mut tmp_sk = Vec::new();
         for j in i {
             if let UserSelector::Seek(sk) = j {
-                let user = data.by_offset(sk as usize).into_cow(data)
+                let user = data.by_offset(sk as usize)?.into_cow(data)
                     .ok_or_else(|| format_err!("by_offset returned None"))?;
                 tmp_sk.push(user.into_owned());
                 settings.limit -= 1; if settings.limit == 0 {return Err(format_err!("Limit reached!"))}
@@ -149,7 +139,7 @@ pub fn find_seek<D: SimpleData+SeekableData>(data: &mut D, query: Vec<Vec<UserSe
         seeks.push(tmp_sk);
     }
     let mut other = find(data, &new_query, settings)?;
-    data.reset();
+    data.reset()?;
     for (i, v) in other.iter_mut().enumerate() {
         v.append(&mut seeks[i])
     }
@@ -157,18 +147,17 @@ pub fn find_seek<D: SimpleData+SeekableData>(data: &mut D, query: Vec<Vec<UserSe
 }
 
 pub fn find<D: SimpleData>(data: &mut D, query: &[Vec<UserSelector>], mut settings: SearchSettings) -> Res<Vec<Vec<UserInfo>>> {
-    let len = query.len();
-    let compiled: Res<Vec<_>> = query.into_iter().map(|x| Compiled::compile(&x)).collect();
+    let compiled: Res<Vec<_>> = query.iter().map(|x| Compiled::compile(&x)).collect();
     let compiled = compiled?;
 
     let mut to_find = HashMap::new();
     let mut iter_all = false;
-    for (i, constraints) in compiled.iter().enumerate() {
+    for constraints in &compiled {
         for selector in constraints {
             if let Compiled::Glob(_) | Compiled::Regexp(_) = selector {
                 iter_all = true;
             }
-            let r = to_find.entry(selector).or_insert_with(|| Vec::new());
+            to_find.entry(selector).or_insert_with(Vec::new);
         }
     }
 
@@ -180,7 +169,7 @@ pub fn find<D: SimpleData>(data: &mut D, query: &[Vec<UserSelector>], mut settin
         };
         if !settings.use_cache {
             let mut reader = data.get_reader(ReadConfig::None);
-            'l: while let Some(user) = reader.next() {
+            'l1: while let Some(user) = reader.next() {
                 for (c, v) in &mut to_find {
                     let matches = match c {
                         Compiled::Name(n) => n == &user.name.to_lowercase(),
@@ -198,41 +187,41 @@ pub fn find<D: SimpleData>(data: &mut D, query: &[Vec<UserSelector>], mut settin
                         v.push(ReaderValue::Owned(user.clone()));
                         pending -= 1;
                         if pending == 0 {
-                            break 'l;
+                            break 'l1;
                         }
                     }
                 }
             }
         } else {
-            'l: for (name, r) in data.iter_names() {
+            'l2: for (name, r) in data.iter_names() {
                 for (c, v) in &mut to_find {
                     let matches = match c {
                         Compiled::Name(n) => name == n,
                         Compiled::Glob(gl) => gl.matches(name),
                         Compiled::Regexp(re) => re.reg.is_match(name),
-                        Compiled::Seek(s) =>
+                        Compiled::Seek(_) =>
                             return Err(format_err!("Seek search not available. Use find_seek(...) instead")),
                         _ => false
                     };
                     if matches {
                         settings.limit -= 1; if settings.limit == 0 {return Err(format_err!("Limit reached!"))}
-                        v.push(data.get(*r));
+                        v.push(data.get(*r)?);
                         pending -= 1;
                         if pending == 0 {
-                            break 'l;
+                            break 'l2;
                         }
                     }
                 }
             }
-            'l: for (id, r) in data.iter_ids() {
+            'l3: for (id, r) in data.iter_ids() {
                 for (c, v) in &mut to_find {
                     match c {
                         Compiled::PikabuId(i) if i == id => {
                             settings.limit -= 1; if settings.limit == 0 {return Err(format_err!("Limit reached!"))}
-                            v.push(data.get(*r));
+                            v.push(data.get(*r)?);
                             pending -= 1;
                             if pending == 0 {
-                                break 'l;
+                                break 'l3;
                             }
                         }
                         _ => {}
@@ -247,10 +236,10 @@ pub fn find<D: SimpleData>(data: &mut D, query: &[Vec<UserSelector>], mut settin
                     return Err(format_err!("Internal searcher error. Invalid constraint in light path")),
                 Compiled::Name(n) => data.by_name(&n),
                 Compiled::PikabuId(id) => data.by_id(*id),
-                Compiled::Seek(s) =>
+                Compiled::Seek(_) =>
                     return Err(format_err!("Seek search not available. Use find_seek(...) instead"))
             };
-            let cow = val.into_cow(data);
+            let cow = val?.into_cow(data);
             if let Some(x) = cow {
                 settings.limit -= 1; if settings.limit == 0 {return Err(format_err!("Limit reached!"))}
                 v.push(ReaderValue::Owned(x.into_owned()))
@@ -270,7 +259,7 @@ pub fn find<D: SimpleData>(data: &mut D, query: &[Vec<UserSelector>], mut settin
             // Dedup:
             .fold((HashSet::new(), Vec::new()), |(mut h, mut r), i| {
                 if h.insert(i.pikabu_id) {
-                    r.push(i.clone())  // FIXME: Avoid this clone somehow? Maybe Rc<_>?
+                    r.push(i)
                 }
                 (h, r)
             })

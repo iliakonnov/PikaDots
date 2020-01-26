@@ -6,8 +6,6 @@ use crate::Res;
 use std::borrow::Cow;
 use streaming_iterator::StreamingIterator;
 use std::io::SeekFrom;
-use std::collections::hash_map::RandomState;
-use failure::_core::slice::Iter;
 use parking_lot::Mutex;
 use std::borrow::BorrowMut;
 
@@ -145,7 +143,7 @@ impl<'a, T: SimpleData+Sized> StreamingIterator for Reader<'a, T> {
     fn advance(&mut self) {
         let chunk = self.data.read_next();
         self.val = if let Some(x) = chunk {
-            if let ReadConfig::Cache(cfg) = &self.config {
+            if let ReadConfig::Cache(cfg) = self.config {
                 ReaderValue::Cached(self.data.put_cache(x, cfg))
             } else {
                 ReaderValue::Owned(x)
@@ -168,42 +166,42 @@ pub trait SimpleData: Sized {
     type Reader;
     type Reference: Copy;
 
-    fn get(&self, r: Self::Reference) -> ReaderValue;
+    fn get(&self, r: Self::Reference) -> Res<ReaderValue>;
 
     fn get_cached(&self, idx: usize) -> Option<&UserInfo>;
-    fn put_cache(&mut self, info: UserInfo, cfg: &CacheConfig) -> usize;
+    fn put_cache(&mut self, info: UserInfo, cfg: CacheConfig) -> usize;
 
     // FIXME: Too concrete type
     fn iter_names(&self) -> std::collections::hash_map::Iter<String, Self::Reference>;
     fn iter_ids(&self) -> std::collections::hash_map::Iter<i64, Self::Reference>;
 
-    fn by_name(&mut self, name: &str) -> ReaderValue;
-    fn by_id(&mut self, id: i64) -> ReaderValue;
+    fn by_name(&mut self, name: &str) -> Res<ReaderValue>;
+    fn by_id(&mut self, id: i64) -> Res<ReaderValue>;
 
     fn read_next(&mut self) -> Option<UserInfo>;
 
     fn get_reader(&mut self, config: ReadConfig) -> Reader<Self> {
         Reader {
             data: self,
-            config: config,
+            config,
             val: ReaderValue::None
         }
     }
 }
 
 pub trait SeekableData {
-    fn read_at(&self, offset: usize) -> Option<UserInfo>;
+    fn read_at(&self, offset: usize) -> Res<Option<UserInfo>>;
 
-    fn reset(&self);
+    fn reset(&self) -> Res<()>;
 
-    fn read_at_val(&self, offset: usize) -> ReaderValue {
-        match self.read_at(offset) {
+    fn read_at_val(&self, offset: usize) -> Res<ReaderValue> {
+        Ok(match self.read_at(offset)? {
             Some(x) => ReaderValue::Owned(x),
             None => ReaderValue::None
-        }
+        })
     }
 
-    fn by_offset(&self, offset: usize) -> ReaderValue;
+    fn by_offset(&self, offset: usize) -> Res<ReaderValue>;
 }
 
 impl<R, F> Data<R, F> {
@@ -245,19 +243,19 @@ impl<R: Read> SimpleData for Data<R, CacheRef> {
     type Reader = R;
     type Reference = CacheRef;
 
-    fn get(&self, r: Self::Reference) -> ReaderValue {
-        if r.0 < self.cached.len() {
+    fn get(&self, r: Self::Reference) -> Res<ReaderValue> {
+        Ok(if r.0 < self.cached.len() {
             ReaderValue::Cached(r.0)
         } else {
             ReaderValue::None
-        }
+        })
     }
 
     fn get_cached(&self, idx: usize) -> Option<&UserInfo> {
         self.cached.get(idx)
     }
 
-    fn put_cache(&mut self, info: UserInfo, cfg: &CacheConfig) -> usize {
+    fn put_cache(&mut self, info: UserInfo, cfg: CacheConfig) -> usize {
         let idx = self.cached.len();
 
         if cfg.offsets {
@@ -286,18 +284,18 @@ impl<R: Read> SimpleData for Data<R, CacheRef> {
         self.ids.iter()
     }
 
-    fn by_name(&mut self, name: &str) -> ReaderValue {
-        match self.names.get(&name.to_lowercase()) {
+    fn by_name(&mut self, name: &str) -> Res<ReaderValue> {
+        Ok(match self.names.get(&name.to_lowercase()) {
             Some(x) => ReaderValue::Cached(x.0),
             None => ReaderValue::None
-        }
+        })
     }
 
-    fn by_id(&mut self, id: i64) -> ReaderValue {
-        match self.ids.get(&id) {
+    fn by_id(&mut self, id: i64) -> Res<ReaderValue> {
+        Ok(match self.ids.get(&id) {
             Some(x) => ReaderValue::Cached(x.0),
             None => ReaderValue::None
-        }
+        })
     }
 
     fn read_next(&mut self) -> Option<UserInfo> {
@@ -310,29 +308,30 @@ impl<R: Read> SimpleData for Data<R, CacheRef> {
 }
 
 impl<R: Read+Seek, F> SeekableData for Data<Mutex<R>, F> {
-    fn read_at(&self, offset: usize) -> Option<UserInfo> {
+    fn read_at(&self, offset: usize) -> Res<Option<UserInfo>> {
         let mut reader = self.reader.lock();
-        reader.seek(SeekFrom::Start(offset as u64));
+        reader.seek(SeekFrom::Start(offset as u64))?;
         let r: &mut R = reader.borrow_mut();
-        if let Ok(Some(x)) = read_chunk(r, Some(offset)) {
+        Ok(if let Ok(Some(x)) = read_chunk(r, Some(offset)) {
             Some(x)
         } else {
             None
-        }
+        })
     }
 
-    fn reset(&self) {
-        self.reader.lock().seek(SeekFrom::Start(0));
+    fn reset(&self) -> Res<()> {
+        self.reader.lock().seek(SeekFrom::Start(0))?;
+        Ok(())
     }
 
-    fn by_offset(&self, offset: usize) -> ReaderValue {
-        match self.offsets.get(&offset) {
+    fn by_offset(&self, offset: usize) -> Res<ReaderValue> {
+        Ok(match self.offsets.get(&offset) {
             Some(x) => ReaderValue::Cached(*x),
-            None => match self.read_at(offset) {
+            None => match self.read_at(offset)? {
                 Some(x) => ReaderValue::Owned(x),
                 None => ReaderValue::None
             }
-        }
+        })
     }
 }
 
@@ -340,9 +339,9 @@ impl<R: Read+Seek> SimpleData for Data<Mutex<R>, SeekableRef> where Self: Seekab
     type Reader = R;
     type Reference = SeekableRef;
 
-    fn get(&self, r: Self::Reference) -> ReaderValue {
+    fn get(&self, r: Self::Reference) -> Res<ReaderValue> {
         match r {
-            SeekableRef::Cached(idx) => ReaderValue::Cached(idx),
+            SeekableRef::Cached(idx) => Ok(ReaderValue::Cached(idx)),
             SeekableRef::Seek(s) => self.read_at_val(s)
         }
     }
@@ -359,7 +358,7 @@ impl<R: Read+Seek> SimpleData for Data<Mutex<R>, SeekableRef> where Self: Seekab
         self.ids.iter()
     }
 
-    fn put_cache(&mut self, info: UserInfo, cfg: &CacheConfig) -> usize {
+    fn put_cache(&mut self, info: UserInfo, cfg: CacheConfig) -> usize {
         let idx = self.cached.len();
 
         if cfg.offsets {
@@ -380,19 +379,19 @@ impl<R: Read+Seek> SimpleData for Data<Mutex<R>, SeekableRef> where Self: Seekab
         idx
     }
 
-    fn by_name(&mut self, name: &str) -> ReaderValue {
+    fn by_name(&mut self, name: &str) -> Res<ReaderValue> {
         match self.names.get(&name.to_lowercase()) {
             Some(SeekableRef::Seek(s)) => self.read_at_val(*s),
-            Some(SeekableRef::Cached(x)) => ReaderValue::Cached(*x),
-            None => ReaderValue::None
+            Some(SeekableRef::Cached(x)) => Ok(ReaderValue::Cached(*x)),
+            None => Ok(ReaderValue::None)
         }
     }
 
-    fn by_id(&mut self, id: i64) -> ReaderValue {
+    fn by_id(&mut self, id: i64) -> Res<ReaderValue> {
         match self.ids.get(&id) {
             Some(SeekableRef::Seek(s)) => self.read_at_val(*s),
-            Some(SeekableRef::Cached(x)) => ReaderValue::Cached(*x),
-            None => ReaderValue::None
+            Some(SeekableRef::Cached(x)) => Ok(ReaderValue::Cached(*x)),
+            None => Ok(ReaderValue::None)
         }
     }
 

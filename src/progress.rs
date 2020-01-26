@@ -1,4 +1,5 @@
 use indicatif::ProgressBar;
+use crate::Res;
 use std::io::prelude::*;
 use std::io::{Error, SeekFrom};
 
@@ -66,10 +67,10 @@ impl ReaderWrapper<std::fs::File> {
 }
 
 impl<R: Seek> ReaderWrapper<R> {
-    pub fn auto(mut reader: R) -> Self {
+    pub fn auto(mut reader: R) -> Res<Self> {
         let length = reader.seek(SeekFrom::End(0)).unwrap_or_default();
-        reader.seek(SeekFrom::Start(0));
-        ReaderWrapper::new(reader, length)
+        reader.seek(SeekFrom::Start(0))?;
+        Ok(ReaderWrapper::new(reader, length))
     }
 }
 

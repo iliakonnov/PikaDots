@@ -1,21 +1,19 @@
 #![feature(proc_macro_hygiene, decl_macro)]
+#![allow(clippy::blacklisted_name)]  // bar is good identifier
 #[macro_use] extern crate rocket;
 #[macro_use] extern crate clap;
 #[macro_use] extern crate failure;
 extern crate pikadots;
-use clap::{App, SubCommand, Arg};
-use std::env::args_os;
-use std::ffi::{OsString, OsStr};
-use std::fs::{File, read};
-use pikadots::{Res};
+use std::ffi::OsStr;
+use std::fs::File;
+use pikadots::Res;
 use pikadots::progress::*;
 use std::io::{BufReader, Cursor};
 use {std::io, std::io::prelude::*};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use streaming_iterator::StreamingIterator;
-use pikadots::data::{UserInfo, SimpleData};
+use pikadots::data::SimpleData;
 use std::collections::HashMap;
-use chrono::NaiveDateTime;
 use pikadots::search::UserSelector;
 use parking_lot::Mutex;
 
@@ -117,7 +115,7 @@ fn do_draw(gzip: bool, data: FileOrStdin, output: PathBuf, users: Vec<Vec<UserSe
             // FIXME: Incorrect progress. Should be Wrapper<BufReader<File>> instead of BufReader<Wrapper<File>>
             // TODO: Make correct benchamarks of reading data. It looks really slow
             let reader = ReaderWrapper::from_file(f);
-            let mut bar = reader.bar.clone();
+            let bar = reader.bar.clone();
             let reader = BufReader::new(reader);
 
             let res = if gzip {
@@ -144,7 +142,7 @@ fn do_draw(gzip: bool, data: FileOrStdin, output: PathBuf, users: Vec<Vec<UserSe
         }
         FileOrStdin::Stdin(std) => {
             let reader = ReaderWrapper::new(std, 0);
-            let mut bar = reader.bar.clone();
+            let bar = reader.bar.clone();
             let res = if gzip {
                 let mut data: Data<_, CacheRef> = Data::new(flate2::read::GzDecoder::new(reader));
                 work(|x| find(&mut data, &x, SearchSettings {
@@ -167,7 +165,7 @@ fn do_draw(gzip: bool, data: FileOrStdin, output: PathBuf, users: Vec<Vec<UserSe
 fn do_index(file: File, out: FileOrStdout) -> Res<()> {
     use pikadots::data::*;
     let reader = ReaderWrapper::from_file(file);
-    let mut bar = reader.bar.clone();
+    let bar = reader.bar.clone();
     let reader = Mutex::new(BufReader::new(reader));
 
     let mut data: Data<_, SeekableRef> = Data::new(reader);
@@ -182,12 +180,12 @@ fn do_index(file: File, out: FileOrStdout) -> Res<()> {
     match out {
         FileOrStdout::File(mut f) => {
             while let Some(i) = reader.next() {
-                f.write(make_ln(i).as_bytes())?;
+                f.write_all(make_ln(i).as_bytes())?;
             }
         }
         FileOrStdout::Stdout(mut std) => {
             while let Some(i) = reader.next() {
-                std.write(make_ln(i).as_bytes())?;
+                std.write_all(make_ln(i).as_bytes())?;
             }
         }
     }
@@ -196,7 +194,7 @@ fn do_index(file: File, out: FileOrStdout) -> Res<()> {
 }
 
 fn load_index<R>(idx: File, data: &mut pikadots::data::Data<R, pikadots::data::SeekableRef>) -> Res<()> {
-    let mut reader = BufReader::new(idx);
+    let reader = BufReader::new(idx);
     let mut names = HashMap::new();
     let mut ids = HashMap::new();
     for ln in reader.lines() {
@@ -273,10 +271,9 @@ fn main() -> Res<()> {
             let vals = sub.values_of_os("users").unwrap();
             let mut users = Vec::with_capacity(vals.len());
             for i in vals {
-                let s = i.to_str().ok_or(format_err!("Invalid OsStr: {:?}", i))?;
+                let s = i.to_str().ok_or_else(|| format_err!("Invalid OsStr: {:?}", i))?;
                 let splitted: Res<Vec<_>> = s
                     .split(',')
-                    .into_iter()
                     .map(UserSelector::new)
                     .collect();
                 users.push(splitted?)

@@ -4,7 +4,6 @@ use crate::data::*;
 use crate::Res;
 use std::collections::hash_map::Entry;
 use chrono::NaiveDateTime;
-use indicatif::ProgressBar;
 
 #[derive(Deserialize)]
 struct Row {
@@ -39,13 +38,13 @@ pub fn parse_json<R: BufRead, A>(reader: &mut R, data: &mut Data<A, CacheRef>) -
                 let idx = occ.get().0;
                 data.cached[idx].comments.push(ts);
             },
-            Entry::Vacant(vac) => {
+            Entry::Vacant(_) => {
                 data.put_cache(UserInfo {
                     name: parsed.author_username,
                     pikabu_id: parsed.author_id,
                     comments: vec![ts],
                     seek: None,
-                }, &cfg);
+                }, cfg);
             }
         }
     }

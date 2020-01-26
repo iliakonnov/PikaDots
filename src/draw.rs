@@ -5,13 +5,13 @@ use font8x8::UnicodeFonts;
 use std::convert::TryInto;
 
 
-fn draw_text(buf: &mut RgbImage, color: Rgb<u8>, mut x: u32, y: u32, text: &str) {
+fn draw_text(buf: &mut RgbImage, color: Rgb<u8>, mut x: u32, y_orig: u32, text: &str) {
     for ch in text.chars() {
         let letter = font8x8::LATIN_FONTS.get(ch)
-            .or(font8x8::BASIC_FONTS.get(ch))
+            .or_else(|| font8x8::BASIC_FONTS.get(ch))
             .unwrap_or_else(|| [255; 8]);
         {
-            let mut y = y;
+            let mut y = y_orig;
             for row in &letter[..] {
                 let mut x = x;
                 for bit in 0..8 {
@@ -59,12 +59,12 @@ pub fn generate(points: &[NaiveDateTime]) -> Generated {
         }
     }
     let first = points[0];
-    let ONE_DAY = Duration::days(1);
+    let one_day = Duration::days(1);
 
     let mut month_start = 0;
     let mut days = Vec::new();
     let mut last_day = Day {
-        date: first.date() - ONE_DAY,
+        date: first.date() - one_day,
         points: [0; WIDTH]
     };
     let mut months = Vec::new();
@@ -95,14 +95,14 @@ pub fn generate(points: &[NaiveDateTime]) -> Generated {
                 }
                 days.push(d);
             };
-            let mut d = old_day.date + ONE_DAY;
+            let mut d = old_day.date + one_day;
             insert_day(old_day);
             while d < dt {
                 insert_day(Day {
                     date: d,
                     points: [0; WIDTH]
                 });
-                d += ONE_DAY;
+                d += one_day;
             }
         }
         let position = (p.hour()*60 + p.minute()) as usize;
@@ -134,7 +134,7 @@ impl Generated {
         let mut y = OFFSET_Y;
         for d in self.days {
             let mut x = OFFSET_X;
-            for (i, p) in d.points.iter().enumerate() {
+            for p in d.points.iter() {
                 let px = img.get_pixel_mut(x, y);
                 *px = Rgb(match p {
                     0 => [0x00, 0x00, 0x00], // Black
@@ -175,7 +175,7 @@ impl Generated {
 
         for month in self.months {
             let y = month.start as u32 + OFFSET_Y;
-            for x in (OFFSET_X..width) {
+            for x in OFFSET_X..width {
                 let px = img.get_pixel_mut(x, y);
                 if px.0 == [0, 0, 0] {
                     *px = Rgb(GRAY);
@@ -190,7 +190,7 @@ impl Generated {
                     Rgb(if is_january { [255, 0, 255] } else { [255, 255, 255] }),
                     0, y-15,
                     &if is_january { format!("'{:02}", month.year % 100) } else {
-                        format!("{}", match month.month {
+                        match month.month {
                             1 => "Jan",
                             2 => "Feb",
                             3 => "Mar",
@@ -204,7 +204,7 @@ impl Generated {
                             11 => "Nov",
                             12 => "Dec",
                             _ => "???"
-                        })
+                        }.to_string()
                     }
                 );
             }
@@ -218,7 +218,7 @@ impl Generated {
                 x, 0,
                 &format!("{:02}:00", (i+timezone) % 24)
             );
-            for y in (OFFSET_Y..height) {
+            for y in OFFSET_Y..height {
                 let px = img.get_pixel_mut(x, y);
                 if px.0 == [0, 0, 0] {
                     *px = Rgb(GRAY);
