@@ -144,29 +144,29 @@ impl Generated {
                     #[cfg(not(feature="dark"))] 1 => [0x00, 0xFF, 0x00], // Lime
                     #[cfg(not(feature="dark"))] 2 => [0xFF, 0xFF, 0x00], // Yellow
                     3 => [0x00, 0xFF, 0xFF], // Cyan
-                    4 => [0x7F, 0xFF, 0xD4], // Aquamarine
-                    // Blue -> Green (step 2)
-                    #[cfg(feature="dark")] 5..=7 => [0x3C, 0xB3, 0x71],  // DarkGreen
-                    #[cfg(not(feature="dark"))] 5..=7 => [0xFF, 0x00, 0x00],  // Red
-                    8..=10 => [0x00, 0xFA, 0x9A], // MediumSpringGreen
-                    11..=13 => [0x00, 0xFF, 0x00], // Lime
-                    13..=15 => [0xAD, 0xFF, 0x2F], // GreenYellow
-                    // Green -> Yellow (step 6)
-                    16..=21 => [0xFF, 0xD7, 0x00], // Gold
-                    22..=27 => [0xFF, 0xFF, 0x00],  // Yellow
-                    28..=33 => [0xFF, 0xA5, 0x00], // Orange
-                    34..=39 => [0xFF, 0x7F, 0x50], // Coral
-                    // Orange -> Red (step 12)
-                    40..=51 => [0xFA, 0x80, 0x72], // Salmon
-                    52..=63 => [0xDC, 0x14, 0x3C], // Crimson
-                    64..=75 => [0xFF, 0x00, 0x00], // Red
-                    // Red -> Pink (step 24)
-                    76..=99 => [0xFF, 0x14, 0x93], // Pink
-                    100..=123 => [0xFF, 0x00, 0xFF], // Magenta
-                    124..=147 => [0x8A, 0x2B, 0xE2], // BlueViolet
-                    148..=171 => [0x80, 0x00, 0x80], // Purple
+                    // Blue -> Green (step 6)
+                    #[cfg(feature="dark")] 4..=9 => [0x7F, 0xFF, 0xD4], // Aquamarine
+                    #[cfg(not(feature="dark"))] 4..=9 => [0xFF, 0x00, 0x00],  // Red
+                    10..=15 => [0x3C, 0xB3, 0x71],  // DarkGreen
+                    16..=21 => [0x00, 0xFA, 0x9A], // MediumSpringGreen
+                    22..=27 => [0x00, 0xFF, 0x00], // Lime
+                    28..=33 => [0xAD, 0xFF, 0x2F], // GreenYellow
+                    // Green -> Yellow
+                    34..=39 => [0xFF, 0xD7, 0x00], // Gold
+                    40..=45 => [0xFF, 0xFF, 0x00],  // Yellow
+                    46..=51 => [0xFF, 0xA5, 0x00], // Orange
+                    52..=57 => [0xFF, 0x7F, 0x50], // Coral
+                    // Orange -> Red
+                    58..=63 => [0xFA, 0x80, 0x72], // Salmon
+                    64..=69 => [0xDC, 0x14, 0x3C], // Crimson
+                    70..=75 => [0xFF, 0x00, 0x00], // Red
+                    // Red -> Pink
+                    76..=81 => [0xFF, 0x14, 0x93], // Pink
+                    82..=87 => [0xFF, 0x00, 0xFF], // Magenta
+                    88..=93 => [0x8A, 0x2B, 0xE2], // BlueViolet
+                    94..=99 => [0x80, 0x00, 0x80], // Purple
                     // Fallback
-                    172..=255 => [0xFF, 0xFF, 0xFF],  // White
+                    100..=255 => [0xFF, 0xFF, 0xFF],  // White
                 });
                 x += 1;
             }

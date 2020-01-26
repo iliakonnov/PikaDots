@@ -82,12 +82,15 @@ fn do_info(state: State<WebState>, query: String) -> Result<Html<String>, Error>
         <meta charset="utf-8">
         <title>PikaDots</title>
     </head><body><table>
-        <tr>
-            <th>Name</th>
-            <th>Id</th>
-            <th>Sk</th>
-            <th>Comment count</th>
-        </tr>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Id</th>
+                <th>Sk</th>
+                <th>Comment count</th>
+            </tr>
+        </thead>
+        <tbody>
     "#.to_string();
     for u in users {
         res.push_str(&format!(r#"
@@ -101,7 +104,7 @@ fn do_info(state: State<WebState>, query: String) -> Result<Html<String>, Error>
             sk=u.seek.map(|x| x.to_string()).unwrap_or_default()
         ))
     }
-    res.push_str("</body></html>");
+    res.push_str("</tbody></table></body></html>");
     Ok(Html(res))
 }
 
