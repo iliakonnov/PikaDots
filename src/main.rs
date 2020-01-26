@@ -56,9 +56,14 @@ fn do_parse(source: FileOrStdin, src_gz: bool, dest: FileOrStdout, dest_gz: bool
     match source {
         FileOrStdin::File(f) => {
             if src_gz {
-                parse_json(&mut BufReader::new(flate2::read::GzDecoder::new(f)), &mut data)?;
+                parse_json(&mut BufReader::new(
+                    flate2::read::GzDecoder::new(
+                        pikadots::progress::ReaderWrapper::from_file(f)
+                )), &mut data)?;
             } else {
-                parse_json(&mut BufReader::new(f), &mut data)?;
+                parse_json(&mut BufReader::new(
+                    pikadots::progress::ReaderWrapper::from_file(f)
+                ), &mut data)?
             }
         },
         FileOrStdin::Stdin(f) => {
@@ -69,20 +74,20 @@ fn do_parse(source: FileOrStdin, src_gz: bool, dest: FileOrStdout, dest_gz: bool
             }
         }
     }
-    eprintln!("Writing...");
+    eprintln!("Writing {} entries...", data.cached.len());
     match dest {
         FileOrStdout::File(f) => {
             if dest_gz {
-                write_all(data, flate2::write::GzEncoder::new(f, flate2::Compression::new(3)))?;
+                write_all(&data, flate2::write::GzEncoder::new(f, flate2::Compression::new(3)))?;
             } else {
-                write_all(data, f)?;
+                write_all(&data, f)?;
             }
         }
         FileOrStdout::Stdout(f) => {
             if dest_gz {
-                write_all(data, flate2::write::GzEncoder::new(f, flate2::Compression::new(3)))?;
+                write_all(&data, flate2::write::GzEncoder::new(f, flate2::Compression::new(3)))?;
             } else {
-                write_all(data, f)?;
+                write_all(&data, f)?;
             }
         }
     }
@@ -169,7 +174,7 @@ fn do_index(file: File, out: FileOrStdout) -> Res<()> {
     let reader = Mutex::new(BufReader::new(reader));
 
     let mut data: Data<_, SeekableRef> = Data::new(reader);
-    let mut reader = data.get_reader(ReadConfig::None);
+    let mut reader = data.get_reader(ReadConfig::None)?;
     let make_ln = |i: &UserInfo| {
         if let Some(s) = i.seek {
             format!("{},{},{}\n", i.pikabu_id, s, i.name)
@@ -218,7 +223,7 @@ fn main() -> Res<()> {
         (author: "by Dino")
         (@subcommand draw =>
             (about: "Draw images")
-            (@arg gzip: -t --tz "Timezone")
+            (@arg tz: -t --tz "Timezone")
             (@arg gzip: -z --gzip "Use gzip when reading data")
             (@arg data: -d --data +takes_value "Path to data. Omit to read from stdin")
             (@arg index: -i --index +takes_value "Load index from file")
@@ -265,7 +270,6 @@ fn main() -> Res<()> {
             let data = FileOrStdin::new(sub.value_of_os("data"))?;
             let output = PathBuf::from(sub.value_of_os("output").unwrap());
             let index = sub.value_of_os("index").map(File::open);
-
             let index = if let Some(idx) = index {Some(idx?)} else {None};
 
             let vals = sub.values_of_os("users").unwrap();
@@ -319,7 +323,7 @@ fn main() -> Res<()> {
                         offsets: false,
                         prefer_seek: seeks
                     })
-                );
+                )?;
                 while let Some(_) = reader.next() {
                     // Just reading all items
                 }

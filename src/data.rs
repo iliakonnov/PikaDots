@@ -72,9 +72,8 @@ pub fn write_chunk<W: Write>(mut writer: W, info: Option<&UserInfo>) -> Res<()> 
     }
 }
 
-pub fn write_all<W: Write, D: SimpleData>(mut data: D, mut writer: W) -> Res<()> {
-    let mut reader = data.get_reader(ReadConfig::None);
-    while let Some(x) = reader.next() {
+pub fn write_all<W: Write, D: SimpleData>(data: &D, mut writer: W) -> Res<()> {
+    for x in data.iter_cached() {
         write_chunk(&mut writer, Some(x))?;
     }
     write_chunk(writer, None)?;
@@ -172,6 +171,7 @@ pub trait SimpleData: Sized {
     fn put_cache(&mut self, info: UserInfo, cfg: CacheConfig) -> usize;
 
     // FIXME: Too concrete type
+    fn iter_cached(&self) -> std::slice::Iter<UserInfo>;
     fn iter_names(&self) -> std::collections::hash_map::Iter<String, Self::Reference>;
     fn iter_ids(&self) -> std::collections::hash_map::Iter<i64, Self::Reference>;
 
@@ -180,13 +180,7 @@ pub trait SimpleData: Sized {
 
     fn read_next(&mut self) -> Option<UserInfo>;
 
-    fn get_reader(&mut self, config: ReadConfig) -> Reader<Self> {
-        Reader {
-            data: self,
-            config,
-            val: ReaderValue::None
-        }
-    }
+    fn get_reader(&mut self, config: ReadConfig) -> Res<Reader<Self>>;
 }
 
 pub trait SeekableData {
@@ -208,6 +202,7 @@ impl<R, F> Data<R, F> {
     pub fn new(reader: R) -> Self {
         Data {
             reader,
+            is_reader_taken: false,
             cached: Default::default(),
             names: Default::default(),
             ids: Default::default(),
@@ -223,6 +218,7 @@ impl<R, F> Data<R, F> {
 
 pub struct Data<R, F> {
     reader: R,
+    is_reader_taken: bool,
     pub cached: Vec<UserInfo>,
     pub names: HashMap<String, F>,
     pub ids: HashMap<i64, F>,
@@ -276,6 +272,10 @@ impl<R: Read> SimpleData for Data<R, CacheRef> {
         idx
     }
 
+    fn iter_cached(&self) -> std::slice::Iter<UserInfo> {
+        self.cached.iter()
+    }
+
     fn iter_names(&self) -> std::collections::hash_map::Iter<String, Self::Reference> {
         self.names.iter()
     }
@@ -303,6 +303,19 @@ impl<R: Read> SimpleData for Data<R, CacheRef> {
             Some(x)
         } else {
             None
+        }
+    }
+
+    fn get_reader(&mut self, config: ReadConfig) -> Res<Reader<Self>> {
+        if self.is_reader_taken {
+            return Err(format_err!("You should not take reader multiple times"))
+        } else {
+            self.is_reader_taken = true;
+            Ok(Reader {
+                data: self,
+                config,
+                val: ReaderValue::None
+            })
         }
     }
 }
@@ -348,6 +361,10 @@ impl<R: Read+Seek> SimpleData for Data<Mutex<R>, SeekableRef> where Self: Seekab
 
     fn get_cached(&self, idx: usize) -> Option<&UserInfo> {
         self.cached.get(idx)
+    }
+
+    fn iter_cached(&self) -> std::slice::Iter<UserInfo> {
+        self.cached.iter()
     }
 
     fn iter_names(&self) -> std::collections::hash_map::Iter<String, Self::Reference> {
@@ -406,5 +423,14 @@ impl<R: Read+Seek> SimpleData for Data<Mutex<R>, SeekableRef> where Self: Seekab
         } else {
             None
         }
+    }
+
+    fn get_reader(&mut self, config: ReadConfig) -> Res<Reader<Self>> {
+        self.reset()?;
+        Ok(Reader {
+            data: self,
+            config,
+            val: ReaderValue::None
+        })
     }
 }

@@ -168,7 +168,7 @@ pub fn find<D: SimpleData>(data: &mut D, query: &[Vec<UserSelector>], mut settin
             to_find.len() // Only names and id's, so only one user for each selector
         };
         if !settings.use_cache {
-            let mut reader = data.get_reader(ReadConfig::None);
+            let mut reader = data.get_reader(ReadConfig::None)?;
             'l1: while let Some(user) = reader.next() {
                 for (c, v) in &mut to_find {
                     let matches = match c {

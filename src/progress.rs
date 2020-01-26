@@ -89,8 +89,14 @@ impl ProgressStyle {
         res
     }
 
+    #[cfg(not(feature="no_progress"))]
     pub fn make(self, len: u64) -> ProgressBar {
         ProgressBar::new(len).with_style(self.into())
+    }
+
+    #[cfg(feature="no_progress")]
+    pub fn make(self, _len: u64) -> ProgressBar {
+        ProgressBar::hidden()
     }
 
     pub fn file(self, f: std::fs::File) -> ProgressBar {

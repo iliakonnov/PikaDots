@@ -5,7 +5,7 @@ use font8x8::UnicodeFonts;
 use std::convert::TryInto;
 
 
-fn draw_text(buf: &mut RgbImage, color: Rgb<u8>, mut x: u32, y_orig: u32, text: &str) {
+fn draw_text(buf: &mut RgbImage, color: Rgb<u8>, mut x_base: u32, y_orig: u32, text: &str) {
     for ch in text.chars() {
         let letter = font8x8::LATIN_FONTS.get(ch)
             .or_else(|| font8x8::BASIC_FONTS.get(ch))
@@ -13,7 +13,7 @@ fn draw_text(buf: &mut RgbImage, color: Rgb<u8>, mut x: u32, y_orig: u32, text: 
         {
             let mut y = y_orig;
             for row in &letter[..] {
-                let mut x = x;
+                let mut x = x_base;
                 for bit in 0..8 {
                     match *row & (1 << bit) {
                         0 => {},
@@ -24,7 +24,7 @@ fn draw_text(buf: &mut RgbImage, color: Rgb<u8>, mut x: u32, y_orig: u32, text: 
                 y += 1;
             }
         }
-        x += 8;
+        x_base += 8;
     }
 }
 
@@ -120,12 +120,12 @@ pub fn generate(points: &[NaiveDateTime]) -> Generated {
 impl Generated {
     // TODO: Optimize and remove second pass. But it is very bad idea
     pub fn into_image(self, timezone: i8) -> Res<RgbImage> {
-        const OFFSET_X: u32 = 8*3;
-        const OFFSET_Y: u32 = 8*2;
+        const OFFSET_X: u32 = 8*3 + 1;
+        const OFFSET_Y: u32 = 8*2 + 1;
         const GRAY: [u8; 3] = [0x40, 0x40, 0x40];
 
         let (width, height) = (WIDTH as u32, self.days.len() as u32);
-        let (width, height) = (width + OFFSET_X, height + OFFSET_Y);
+        let (width, height) = (width + OFFSET_X + 1, height + OFFSET_Y + 1);
         let mut img = RgbImage::from_raw(
             width, height,
             vec![0; (3*width*height) as usize]
@@ -135,39 +135,105 @@ impl Generated {
         for d in self.days {
             let mut x = OFFSET_X;
             for p in d.points.iter() {
-                let px = img.get_pixel_mut(x, y);
-                *px = Rgb(match p {
-                    0 => [0x00, 0x00, 0x00], // Black
-                    // Black -> Blue (step 1)
-                    #[cfg(feature="dark")] 1 => [0x00, 0xB3, 0x00], // 60% green
-                    #[cfg(feature="dark")] 2 => [0x9A, 0x9A, 0x00], // 60% yellow
-                    #[cfg(not(feature="dark"))] 1 => [0x00, 0xFF, 0x00], // Lime
-                    #[cfg(not(feature="dark"))] 2 => [0xFF, 0xFF, 0x00], // Yellow
-                    3 => [0x00, 0xFF, 0xFF], // Cyan
-                    // Blue -> Green (step 6)
-                    #[cfg(feature="dark")] 4..=9 => [0x7F, 0xFF, 0xD4], // Aquamarine
-                    #[cfg(not(feature="dark"))] 4..=9 => [0xFF, 0x00, 0x00],  // Red
-                    10..=15 => [0x3C, 0xB3, 0x71],  // DarkGreen
-                    16..=21 => [0x00, 0xFA, 0x9A], // MediumSpringGreen
-                    22..=27 => [0x00, 0xFF, 0x00], // Lime
-                    28..=33 => [0xAD, 0xFF, 0x2F], // GreenYellow
-                    // Green -> Yellow
-                    34..=39 => [0xFF, 0xD7, 0x00], // Gold
-                    40..=45 => [0xFF, 0xFF, 0x00],  // Yellow
-                    46..=51 => [0xFF, 0xA5, 0x00], // Orange
-                    52..=57 => [0xFF, 0x7F, 0x50], // Coral
-                    // Orange -> Red
-                    58..=63 => [0xFA, 0x80, 0x72], // Salmon
-                    64..=69 => [0xDC, 0x14, 0x3C], // Crimson
-                    70..=75 => [0xFF, 0x00, 0x00], // Red
-                    // Red -> Pink
-                    76..=81 => [0xFF, 0x14, 0x93], // Pink
-                    82..=87 => [0xFF, 0x00, 0xFF], // Magenta
-                    88..=93 => [0x8A, 0x2B, 0xE2], // BlueViolet
-                    94..=99 => [0x80, 0x00, 0x80], // Purple
-                    // Fallback
-                    100..=255 => [0xFF, 0xFF, 0xFF],  // White
-                });
+                #[cfg(not(any(feature="normal", feature="comments", feature="posts")))]
+                compile_error!("One and only one of features must be specified: normal, comments, posts");
+                #[cfg(feature="normal")]
+                let color = {
+                    #[cfg(any(feature="comments", feature="posts"))]
+                    compile_error!("One and only one of features must be specified: normal, comments, posts");
+                    Rgb(match p {
+                        // Step 1
+                        0 => [0x00, 0x00, 0x00], // Black
+                        1 => [0x00, 0xFF, 0x00], // Lime
+                        2 => [0xFF, 0xFF, 0x00], // Yellow
+                        3 => [0x00, 0xFF, 0xFF], // Cyan
+                        4 => [0xFF, 0x00, 0x00],  // Red
+                        5 => [0x3C, 0xB3, 0x71],  // DarkGreen
+                        6 => [0x00, 0xFA, 0x9A], // MediumSpringGreen
+                        7 => [0xAD, 0xFF, 0x2F], // GreenYellow
+                        8 => [0xFF, 0xD7, 0x00], // Gold
+                        9 => [0xFF, 0xFF, 0x00],  // Yellow
+                        10 => [0xFF, 0xA5, 0x00], // Orange
+                        11 => [0xFF, 0x7F, 0x50], // Coral
+                        12 => [0xFA, 0x80, 0x72], // Salmon
+                        13 => [0xDC, 0x14, 0x3C], // Crimson
+                        14 => [0xFF, 0x14, 0x93], // Pink
+                        15 => [0xFF, 0x00, 0xFF], // Magenta
+                        16 => [0x8A, 0x2B, 0xE2], // BlueViolet
+                        17 => [0x80, 0x00, 0x80], // Purple
+                        // Fallback
+                        18..=255 => [0xFF, 0xFF, 0xFF],  // White
+                    })
+                };
+                #[cfg(feature="comments")]
+                let color = {
+                    #[cfg(any(feature="normal", feature="posts"))]
+                    compile_error!("One and only one of features must be specified: normal, comments, posts");
+                    Rgb(match p {
+                        // Step 5
+                        0 => [0x00, 0x00, 0x00], // Black
+                        1..=5 => [0x00, 0xB3, 0x00], // 60% green
+                        5..10 => [0x9A, 0x9A, 0x00], // 60% yellow
+                        10..15 => [0x00, 0xFF, 0xFF], // Cyan
+                        4..=9 => [0x7F, 0xFF, 0xD4], // Aquamarine
+                        10..=15 => [0x3C, 0xB3, 0x71],  // DarkGreen
+                        16..=21 => [0x00, 0xFA, 0x9A], // MediumSpringGreen
+                        22..=27 => [0x00, 0xFF, 0x00], // Lime
+                        28..=33 => [0xAD, 0xFF, 0x2F], // GreenYellow
+                        34..=39 => [0xFF, 0xD7, 0x00], // Gold
+                        40..=45 => [0xFF, 0xFF, 0x00],  // Yellow
+                        46..=51 => [0xFF, 0xA5, 0x00], // Orange
+                        52..=57 => [0xFF, 0x7F, 0x50], // Coral
+                        58..=63 => [0xFA, 0x80, 0x72], // Salmon
+                        64..=69 => [0xDC, 0x14, 0x3C], // Crimson
+                        70..=75 => [0xFF, 0x00, 0x00], // Red
+                        76..=81 => [0xFF, 0x14, 0x93], // Pink
+                        82..=87 => [0xFF, 0x00, 0xFF], // Magenta
+                        88..=93 => [0x8A, 0x2B, 0xE2], // BlueViolet
+                        94..=99 => [0x80, 0x00, 0x80], // Purple
+                        // Fallback
+                        100..=255 => [0xFF, 0xFF, 0xFF],  // White
+                    })
+                };
+                #[cfg(feature="posts")]
+                let color = {
+                    #[cfg(any(feature="normal", feature="comments"))]
+                    compile_error!("One and only one of features must be specified: normal, comments, posts");
+                    Rgb(match p {
+                        // Step 1
+                        0 => [0x00, 0x00, 0x00], // Black
+                        1 => [0x00, 0xB3, 0x00], // 60% green
+                        2 => [0x9A, 0x9A, 0x00], // 60% yellow
+                        3 => [0x00, 0xFF, 0xFF], // Cyan
+                        4 => [0x7F, 0xFF, 0xD4], // Aquamarine
+                        5 => [0x3C, 0xB3, 0x71],  // DarkGreen
+                        6 => [0x00, 0xFA, 0x9A], // MediumSpringGreen
+                        7 => [0x00, 0xFF, 0x00], // Lime
+                        // Step 2
+                        8..=9 => [0xAD, 0xFF, 0x2F], // GreenYellow
+                        10..=11 => [0xFF, 0xD7, 0x00], // Gold
+                        12..=13 => [0xFF, 0xFF, 0x00],  // Yellow
+                        14..=15 => [0xFF, 0xA5, 0x00], // Orange
+                        16..=17 => [0xFF, 0x7F, 0x50], // Coral
+                        18..=19 => [0xFA, 0x80, 0x72], // Salmon
+                        20..=21 => [0xDC, 0x14, 0x3C], // Crimson
+                        22..=23 => [0xFF, 0x00, 0x00], // Red
+                        24..=25 => [0xFF, 0x14, 0x93], // Pink
+                        26..=27 => [0xFF, 0x00, 0xFF], // Magenta
+                        28..=29 => [0x8A, 0x2B, 0xE2], // BlueViolet
+                        30..=31 => [0x80, 0x00, 0x80], // Purple
+                        // Fallback
+                        32..=255 => [0xFF, 0xFF, 0xFF],  // White
+                    })
+                };
+                img.put_pixel(x, y, color);
+                #[cfg(feature="pluses")]
+                {
+                    img.put_pixel(x+1, y, color);
+                    img.put_pixel(x-1, y, color);
+                    img.put_pixel(x-1, y+1, color);
+                    img.put_pixel(x-1, y-1, color);
+                }
                 x += 1;
             }
             y += 1;
@@ -210,8 +276,9 @@ impl Generated {
             }
         }
 
-        let timezone: usize = (24i8 + timezone).try_into()?;
-        for (i, x) in (OFFSET_X..width).step_by(60).enumerate() {
+        let timezone: u32 = (24i8 + timezone).try_into()?;
+        for i in 0..=23 {
+            let x = OFFSET_X + i*60;
             draw_text(
                 &mut img,
                 Rgb([255, 255, 255]),
