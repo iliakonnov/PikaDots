@@ -231,8 +231,8 @@ impl Generated {
                 {
                     img.put_pixel(x+1, y, color);
                     img.put_pixel(x-1, y, color);
-                    img.put_pixel(x-1, y+1, color);
-                    img.put_pixel(x-1, y-1, color);
+                    img.put_pixel(x, y+1, color);
+                    img.put_pixel(x, y-1, color);
                 }
                 x += 1;
             }
