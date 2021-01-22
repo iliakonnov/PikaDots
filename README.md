@@ -1,6 +1,6 @@
 # PikaDots
 
-...
+What is it? It is made purely for [this](https://pikabu.ru/story/pikabushnaya_statistika_kommentariev_7187440) post (in Russian). 
 
 ## How to build
 
